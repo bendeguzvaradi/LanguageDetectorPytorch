@@ -1,7 +1,8 @@
 from torch.utils.data import Dataset
 from pandas.core.frame import DataFrame
-from labels import LanguageEnum
 from typing import Iterable, Any
+
+from lang_detector.labels import LanguageEnum
 
 
 class LanguageDataset(Dataset):

@@ -13,8 +13,8 @@ import time
 import torch
 import pandas as pd
 
-from model import LanguageDetectorModel
-from utils import save_checkpoint, load_checkpoint
+from lang_detector.model import LanguageDetectorModel
+from lang_detector.utils import save_checkpoint, load_checkpoint
 
 
 def parse_args():
