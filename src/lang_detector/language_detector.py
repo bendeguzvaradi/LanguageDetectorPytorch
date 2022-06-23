@@ -6,13 +6,13 @@ from torchtext.data.utils import get_tokenizer
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import random_split
 from pathlib import Path
-from labels import LanguageEnum
-from dataset import LanguageDataset
 from tqdm import tqdm
 import time
 import torch
 import pandas as pd
 
+from lang_detector.labels import LanguageEnum
+from lang_detector.dataset import LanguageDataset
 from lang_detector.model import LanguageDetectorModel
 from lang_detector.utils import save_checkpoint, load_checkpoint
 
@@ -253,10 +253,12 @@ def main():
         print('test accuracy {:8.3f}'.format(accu_test))
 
     if args['mode'] == 'inference':
+        model = model.to(handler.device)
         if not args['input_text']:
             print('Mode is set to inference, but no input text given.')
         print('Beginning inference...')
-
+        pred = handler.predict(text=args['input_text'], model=model)
+        return LanguageEnum(pred).name
 
 
 if __name__ == "__main__":
