@@ -20,8 +20,9 @@ from lang_detector.utils import save_checkpoint, load_checkpoint
 def parse_args():
     """Parse command line arguments."""
     p = ArgumentParser()
-    p.add_argument('mode', choices=['train', 'eval'])
+    p.add_argument('mode', choices=['train', 'eval', 'inference'])
     p.add_argument('input_fn', type=str)
+    p.add_argument('--input_text', help='If in inference mode, predict label to text.')
     p.add_argument('--output_fn', type=str, default='output.csv')
     p.add_argument('--log_interval', type=int, help='Log at every n-th step.',
                    default=500)
@@ -37,7 +38,7 @@ def parse_args():
     return vars(arguments)
 
 
-class DatasetPreprocessor:
+class ModelHandler:
 
     def __init__(self, path: str) -> None:
 
@@ -101,6 +102,13 @@ class DatasetPreprocessor:
         offsets = torch.tensor(offsets[:-1]).cumsum(dim=0)
         text_list = torch.cat(text_list)
         return label_list.to(self.device), text_list.to(self.device), offsets.to(self.device)
+
+    def predict(self, text, model):
+        """Model inference method."""
+        with torch.no_grad():
+            text = torch.tensor(self.text_pipeline(text))
+            output = model(text, torch.tensor([0]))
+            return output.argmax(1).item() + 1
 
 
 def yield_tokens(texts: Iterator) -> List[str]:
@@ -192,10 +200,10 @@ def evaluate(dataloader, model, criterion) -> float:
 
 def main():
     args = parse_args()
-    preprocessor = DatasetPreprocessor(path=args['input_fn'])
-    preprocessor.build_vocab()
-    train_data = preprocessor.preprare_dataset()[0]
-    test_data = preprocessor.preprare_dataset()[1]
+    handler = ModelHandler(path=args['input_fn'])
+    handler.build_vocab()
+    train_data = handler.preprare_dataset()[0]
+    test_data = handler.preprare_dataset()[1]
     num_train = len(train_data)
     training_size = int(num_train * 0.95)
     split_train_, split_valid_ = random_split(train_data,
@@ -204,18 +212,18 @@ def main():
     dataloader = DataLoader(train_data,
                             batch_size=8,
                             shuffle=False,
-                            collate_fn=preprocessor.collate_batch)
+                            collate_fn=handler.collate_batch)
     valid_dataloader = DataLoader(split_valid_, batch_size=args['batch_size'],
                                   shuffle=True,
-                                  collate_fn=preprocessor.collate_batch)
+                                  collate_fn=handler.collate_batch)
     test_dataloader = DataLoader(test_data, batch_size=args['batch_size'],
                                  shuffle=True,
-                                 collate_fn=preprocessor.collate_batch)
+                                 collate_fn=handler.collate_batch)
 
     num_class = len(set([lang.value for lang in LanguageEnum]))
-    vocab_size = len(preprocessor.vocab)
+    vocab_size = len(handler.vocab)
     model = LanguageDetectorModel(vocab_size, args['embedding_size'],
-                                  num_class).to(device=preprocessor.device)
+                                  num_class).to(device=handler.device)
     optim = torch.optim.SGD(model.parameters(), lr=args['lr'])
 
     if args['restore_best_model']:
@@ -234,7 +242,7 @@ def main():
               valid_dataloader=valid_dataloader,
               num_epochs=args['num_epochs'],
               model=model,
-              device=preprocessor.device,
+              device=handler.device,
               criterion=criterion,
               optimizer=optim,
               scheduler=scheduler)
@@ -243,6 +251,12 @@ def main():
         print('Checking the results of test dataset.')
         accu_test = evaluate(test_dataloader, model=model, criterion=criterion)
         print('test accuracy {:8.3f}'.format(accu_test))
+
+    if args['mode'] == 'inference':
+        if not args['input_text']:
+            print('Mode is set to inference, but no input text given.')
+        print('Beginning inference...')
+
 
 
 if __name__ == "__main__":
