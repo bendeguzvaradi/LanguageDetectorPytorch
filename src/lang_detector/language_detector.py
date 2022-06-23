@@ -22,7 +22,6 @@ def parse_args():
     p = ArgumentParser()
     p.add_argument('mode', choices=['train', 'eval', 'inference'])
     p.add_argument('input_fn', type=str)
-    p.add_argument('--input_text', help='If in inference mode, predict label to text.')
     p.add_argument('--output_fn', type=str, default='output.csv')
     p.add_argument('--log_interval', type=int, help='Log at every n-th step.',
                    default=500)
@@ -35,6 +34,10 @@ def parse_args():
     p.add_argument('--restore_best_model', action="store_true",
                    help='If true, restores checkpoint given by checkpoint_fn')
     arguments = p.parse_args()
+    if (vars(arguments)['mode'] == 'inference' and
+       'restore_best_model' not in vars(arguments)):
+        p.error('Use --restore_best_model to use trained model \
+                in order to do inference!')
     return vars(arguments)
 
 
@@ -198,6 +201,15 @@ def evaluate(dataloader, model, criterion) -> float:
     return total_acc/total_count
 
 
+def interactive_inference(handler, model):
+    x = None
+    while x != 'q':
+        x = input('Interactive mode >')
+        print(f'Input: {x}')
+        pred = handler.predict(text=x, model=model)
+        print(f'{LanguageEnum(pred).name}')
+
+
 def main():
     args = parse_args()
     handler = ModelHandler(path=args['input_fn'])
@@ -254,11 +266,8 @@ def main():
 
     if args['mode'] == 'inference':
         model = model.to(handler.device)
-        if not args['input_text']:
-            print('Mode is set to inference, but no input text given.')
         print('Beginning inference...')
-        pred = handler.predict(text=args['input_text'], model=model)
-        return LanguageEnum(pred).name
+        interactive_inference(model=model, handler=handler)
 
 
 if __name__ == "__main__":
